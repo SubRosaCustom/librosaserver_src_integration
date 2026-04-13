@@ -20,6 +20,7 @@ set_property(TARGET rosaserver_src_integration PROPERTY VISIBILITY_INLINES_HIDDE
 
 target_compile_definitions(rosaserver_src_integration PRIVATE SOL_LUAJIT)
 target_link_libraries(rosaserver_src_integration "${MOONJIT_ROOT}/src/libluajit.so")
+include_directories("${CMAKE_CURRENT_LIST_DIR}")
 include_directories("${MOONJIT_ROOT}/src")
 include_directories("${SOL2_ROOT}/include")
 include_directories("${MINIZ_ROOT}")
