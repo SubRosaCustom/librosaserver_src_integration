@@ -151,7 +151,7 @@ sol::table openLibrary(sol::this_state state) {
     throw std::runtime_error("memory table is unavailable");
   }
 
-  originalGetAddress = memory["getAddress"];
+  originalGetAddress = lua_memory["getAddress"];
   memory["getAddress"] = &getAddress;
 
   sol::table library = lua.create_table();
