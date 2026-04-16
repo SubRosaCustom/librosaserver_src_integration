@@ -56,7 +56,7 @@ struct ItemType {
 #undef STRINGFY
 
 ItemType* itemTypes = nullptr;
-sol::protected_function g_originalGetAddress;
+sol::protected_function originalGetAddress;
 
 bool isValidItemType(const ItemType& item_type) {
   return item_type.mass > 0.0f;
@@ -146,8 +146,8 @@ sol::table openLibrary(sol::this_state state) {
   meta["__len"] = &getItemTypeCount;
   meta["__index"] = &itemTypesIndex;
 
-  sol::table lua_item_types = lua["memory"];
-  if (!lua_item_types.valid()) {
+  sol::table lua_memory = lua["memory"];
+  if (!lua_memory.valid()) {
     throw std::runtime_error("memory table is unavailable");
   }
 
