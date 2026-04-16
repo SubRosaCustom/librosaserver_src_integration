@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <stdexcept>
 
@@ -112,16 +111,10 @@ ItemType* itemTypesIndex(sol::table, unsigned int idx) {
 }
 
 sol::table openLibrary(sol::this_state state) {
-  std::fprintf(stderr, "[rs_integration] openLibrary called\n");
-
   sol::state_view lua(state);
 
   const uintptr_t base_address = lua["memory"]["getBaseAddress"]();
   itemTypes = reinterpret_cast<ItemType*>(base_address + 0x5a60d7c0);
-
-  std::fprintf(stderr, "[rs_integration] base=0x%lx, itemTypes=%p\n",
-               static_cast<unsigned long>(base_address),
-               static_cast<void*>(itemTypes));
 
   sol::table lua_item_types = lua["itemTypes"];
   if (!lua_item_types.valid()) {
@@ -139,10 +132,6 @@ sol::table openLibrary(sol::this_state state) {
   meta["__len"] = &getItemTypeCount;
   meta["__index"] = &itemTypesIndex;
 
-  const int initial_count = getItemTypeCount();
-  std::fprintf(stderr, "[rs_integration] installed overrides, initial count = %d\n",
-               initial_count);
-
   sol::table library = lua.create_table();
   library["getCount"] = &getItemTypeCount;
   return library;
@@ -152,6 +141,5 @@ sol::table openLibrary(sol::this_state state) {
 
 extern "C" __attribute__((visibility("default"))) int
 luaopen_librosaserver_src_integration(lua_State* state) {
-  std::fprintf(stderr, "[rs_integration] luaopen_librosaserver_src_integration entry\n");
   return sol::stack::call_lua(state, 1, openLibrary);
 }
