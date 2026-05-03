@@ -9,11 +9,30 @@ namespace {
 
 static constexpr unsigned int rsMaxNumberOfItemTypes = 46;
 static constexpr unsigned int actualMaxNumberOfItemTypes = 255;
+static constexpr unsigned int rsMaxNumberOfVehicleTypes = 17;
+static constexpr unsigned int actualMaxNumberOfVehicleTypes = 127;
+static constexpr uintptr_t vehicleTypesOffset = 0x4d03560;
+static constexpr uintptr_t loadSBVOffset = 0xaf0e0;
+static constexpr uintptr_t setupVehicleTypeNewOffset = 0xac890;
+static constexpr uintptr_t setupObjectTypeWeightOffset = 0xabec0;
 
 ItemType* itemTypes = nullptr;
+VehicleType* vehicleTypes = nullptr;
+
+using LoadSBVFunction = void (*)(int, const char*);
+using SetupVehicleTypeNewFunction = void (*)(int, float, float, int);
+using SetupObjectTypeWeightFunction = void (*)(int);
+
+LoadSBVFunction loadSBVFn = nullptr;
+SetupVehicleTypeNewFunction setupVehicleTypeNewFn = nullptr;
+SetupObjectTypeWeightFunction setupObjectTypeWeightFn = nullptr;
 
 bool isValidItemType(const ItemType& item_type) {
   return item_type.mass > 0.0f;
+}
+
+bool isValidVehicleType(const VehicleType& vehicle_type) {
+  return vehicle_type.mass > 0.0f;
 }
 
 int getItemTypeCount() {
@@ -65,30 +84,141 @@ ItemType* itemTypesIndex(sol::table, unsigned int idx) {
   return &itemTypes[idx];
 }
 
+int getVehicleTypeCount() {
+  int count = static_cast<int>(rsMaxNumberOfVehicleTypes);
+  for (unsigned int i = rsMaxNumberOfVehicleTypes; i <= actualMaxNumberOfVehicleTypes; ++i) {
+    if (isValidVehicleType(vehicleTypes[i])) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+sol::table getAllVehicleTypes(sol::this_state state) {
+  sol::state_view lua(state);
+  sol::table arr = lua.create_table();
+  for (unsigned int i = 0; i < rsMaxNumberOfVehicleTypes; ++i) {
+    arr.add(&vehicleTypes[i]);
+  }
+  for (unsigned int i = rsMaxNumberOfVehicleTypes; i <= actualMaxNumberOfVehicleTypes; ++i) {
+    if (isValidVehicleType(vehicleTypes[i])) {
+      arr.add(&vehicleTypes[i]);
+    }
+  }
+  return arr;
+}
+
+VehicleType* getVehicleTypeByName(const char* name) {
+  if (name == nullptr) {
+    return nullptr;
+  }
+  for (unsigned int i = 0; i <= actualMaxNumberOfVehicleTypes; ++i) {
+    if (i >= rsMaxNumberOfVehicleTypes && !isValidVehicleType(vehicleTypes[i])) {
+      continue;
+    }
+    if (std::strcmp(vehicleTypes[i].name, name) == 0) {
+      return &vehicleTypes[i];
+    }
+  }
+  return nullptr;
+}
+
+VehicleType* vehicleTypesIndex(sol::table, unsigned int idx) {
+  if (idx > actualMaxNumberOfVehicleTypes) {
+    throw std::invalid_argument("Index out of range");
+  }
+  if (idx >= rsMaxNumberOfVehicleTypes && !isValidVehicleType(vehicleTypes[idx])) {
+    throw std::invalid_argument("Index out of range");
+  }
+  return &vehicleTypes[idx];
+}
+
+void loadSBV(int vehicle_type_index, const char* model_name) {
+  const int normalized_index = static_cast<int>(vehicle_type_index);
+  if (normalized_index < 0 || normalized_index > static_cast<int>(actualMaxNumberOfVehicleTypes)) {
+    throw std::invalid_argument("vehicle type index out of range");
+  }
+  if (model_name == nullptr || *model_name == '\0') {
+    throw std::invalid_argument("model name must be non-empty");
+  }
+
+  loadSBVFn(normalized_index, model_name);
+}
+
+void setupVehicleTypeNew(int vehicle_type_index,
+                         float wheel_radius,
+                         float wheel_mass,
+                         int initial_wheel_flags) {
+  const int normalized_index = static_cast<int>(vehicle_type_index);
+  if (normalized_index < 0 || normalized_index > static_cast<int>(actualMaxNumberOfVehicleTypes)) {
+    throw std::invalid_argument("vehicle type index out of range");
+  }
+
+  setupVehicleTypeNewFn(normalized_index, wheel_radius, wheel_mass, initial_wheel_flags);
+}
+
+void setupObjectTypeWeight(int vehicle_type_index) {
+  const int normalized_index = static_cast<int>(vehicle_type_index);
+  if (normalized_index < 0 || normalized_index > static_cast<int>(actualMaxNumberOfVehicleTypes)) {
+    throw std::invalid_argument("vehicle type index out of range");
+  }
+
+  setupObjectTypeWeightFn(normalized_index);
+}
+
 sol::table openLibrary(sol::this_state state) {
   sol::state_view lua(state);
 
   const uintptr_t base_address = lua["memory"]["getBaseAddress"]();
   itemTypes = reinterpret_cast<ItemType*>(base_address + 0x5a60d7c0);
+  vehicleTypes = reinterpret_cast<VehicleType*>(base_address + vehicleTypesOffset);
+  loadSBVFn = reinterpret_cast<LoadSBVFunction>(base_address + loadSBVOffset);
+  setupVehicleTypeNewFn =
+      reinterpret_cast<SetupVehicleTypeNewFunction>(base_address + setupVehicleTypeNewOffset);
+  setupObjectTypeWeightFn =
+      reinterpret_cast<SetupObjectTypeWeightFunction>(base_address + setupObjectTypeWeightOffset);
 
-  sol::table lua_item_types = lua["itemTypes"];
-  if (!lua_item_types.valid()) {
-    throw std::runtime_error("itemTypes table is unavailable");
+  {
+    sol::table lua_item_types = lua["itemTypes"];
+    if (!lua_item_types.valid()) {
+      throw std::runtime_error("itemTypes table is unavailable");
+    }
+    sol::table meta = lua_item_types[sol::metatable_key];
+    if (!meta.valid()) {
+      throw std::runtime_error("itemTypes metatable is unavailable");
+    }
+
+    lua_item_types["getCount"] = &getItemTypeCount;
+    lua_item_types["getAll"] = &getAllItemTypes;
+    lua_item_types["getByName"] = &getItemTypeByName;
+
+    meta["__len"] = &getItemTypeCount;
+    meta["__index"] = &itemTypesIndex;
   }
-  sol::table meta = lua_item_types[sol::metatable_key];
-  if (!meta.valid()) {
-    throw std::runtime_error("itemTypes metatable is unavailable");
+  
+  {
+    sol::table lua_vehicle_types = lua["vehicleTypes"];
+    if (!lua_vehicle_types.valid()) {
+      throw std::runtime_error("vehicleTypes table is unavailable");
+    }
+    sol::table meta = lua_vehicle_types[sol::metatable_key];
+    if (!meta.valid()) {
+      throw std::runtime_error("vehicleTypes metatable is unavailable");
+    }
+
+    lua_vehicle_types["getCount"] = &getVehicleTypeCount;
+    lua_vehicle_types["getAll"] = &getAllVehicleTypes;
+    lua_vehicle_types["getByName"] = &getVehicleTypeByName;
+
+    meta["__len"] = &getVehicleTypeCount;
+    meta["__index"] = &vehicleTypesIndex;
   }
-
-  lua_item_types["getCount"] = &getItemTypeCount;
-  lua_item_types["getAll"] = &getAllItemTypes;
-  lua_item_types["getByName"] = &getItemTypeByName;
-
-  meta["__len"] = &getItemTypeCount;
-  meta["__index"] = &itemTypesIndex;
 
   sol::table library = lua.create_table();
-  library["getCount"] = &getItemTypeCount;
+  library["loadSBV"] = &loadSBV;
+  library["setupVehicleTypeNew"] = &setupVehicleTypeNew;
+  library["setupObjectTypeWeight"] = &setupObjectTypeWeight;
+  lua["srcIntegrationNative"] = library;
   return library;
 }
 
