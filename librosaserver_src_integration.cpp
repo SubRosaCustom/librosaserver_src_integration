@@ -20,7 +20,7 @@ ItemType* itemTypes = nullptr;
 VehicleType* vehicleTypes = nullptr;
 
 using LoadSBVFunction = void (*)(int, const char*);
-using SetupVehicleTypeNewFunction = void (*)(int, float, float, int);
+using SetupVehicleTypeNewFunction = void (*)(int, int, float, float);
 using SetupObjectTypeWeightFunction = void (*)(int);
 
 LoadSBVFunction loadSBVFn = nullptr;
@@ -146,9 +146,9 @@ void loadSBV(int vehicle_type_index, const char* model_name) {
 }
 
 void setupVehicleTypeNew(int vehicle_type_index,
+                         int initial_wheel_flags,
                          float wheel_radius,
-                         float wheel_mass,
-                         int initial_wheel_flags) {
+                         float wheel_mass) {
   const int normalized_index = static_cast<int>(vehicle_type_index);
   if (normalized_index < 0 || normalized_index > static_cast<int>(actualMaxNumberOfVehicleTypes)) {
     throw std::invalid_argument("vehicle type index out of range");
