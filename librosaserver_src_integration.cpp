@@ -154,7 +154,7 @@ void setupVehicleTypeNew(int vehicle_type_index,
     throw std::invalid_argument("vehicle type index out of range");
   }
 
-  setupVehicleTypeNewFn(normalized_index, wheel_radius, wheel_mass, initial_wheel_flags);
+  setupVehicleTypeNewFn(normalized_index, initial_wheel_flags, wheel_radius, wheel_mass);
 }
 
 void setupObjectTypeWeight(int vehicle_type_index) {
